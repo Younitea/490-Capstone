@@ -6,7 +6,7 @@
 class Deck{
   public:
     std::vector<Card> discard_pile;
-    //void shuffle;
+    void shuffle();
     void generateDeck();
   private:
     std::vector<Card> draw_pile;

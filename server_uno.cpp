@@ -1,6 +1,18 @@
 #include "server_uno.h"
 #include "cards.h"
 #include <vector>
+#include <algorithm>
+#include <random>
+#include <ranges>
+#include <iostream>
+
+void Deck::shuffle(){
+  int seed = 42;
+  auto rng = std::default_random_engine(seed);
+  std::ranges::shuffle(draw_pile, rng);
+  for(size_t i = 0; i < draw_pile.size(); i++) //test output, remove later
+    std::cout << draw_pile.at(i).value << draw_pile.at(i).color << '\n';
+}
 
 void Deck::generateDeck(){
   char color;
@@ -35,10 +47,8 @@ void Deck::generateDeck(){
       Card current;
       current.color = color;
       current.value = number;
+      draw_pile.push_back(current);
     }
     number = -4;
   }
-}
-
-int main(){
 }
