@@ -6,6 +6,20 @@
 #include <ranges>
 #include <iostream>
 
+void Deck::dealCards(std::vector<std::string> names){
+  if(names.size() == 0 || names.size() > 10)
+    std::cerr << "Wrong number of players\n";
+  for(size_t i = 0; i < names.size(); i++){
+    Player person;
+    person.name = names.at(i);
+    for(int c = 0; c < 7; c++){
+      //TODO person.hand.push_back(//NEED to remove top card from stack!
+    }
+    players.push_back(person);
+  }
+
+}
+
 void Deck::shuffle(){
   int seed = 42;
   auto rng = std::default_random_engine(seed);

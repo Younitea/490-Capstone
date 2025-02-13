@@ -1,9 +1,17 @@
 #ifndef CARD_H
 #define CARD_H
 
+#include <vector>
+#include <string>
+
 struct Card{
   char color;
   int value;
+};
+
+struct Player{
+  std::vector<Card> hand;
+  std::string name;
 };
 
 #endif
