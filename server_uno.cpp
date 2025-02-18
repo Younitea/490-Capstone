@@ -51,7 +51,8 @@ bool Deck::processInput(int player, int input){
 	if(play.value == discard_pile.back().value || play.color == discard_pile.back().color || play.color == 'w'){
 		discard_pile.push_back(play);
 		players.at(player).hand.erase (players.at(player).hand.begin()+input);
-	
+		if(play.value == -3)
+			clock = !clock;
 		if(play.color == 'w'){
 			//need client info, for now dummy card)
 			Card dummy;
@@ -67,7 +68,7 @@ bool Deck::processInput(int player, int input){
 
 void Deck::generateDeck(){
 	char color;
-	//generate and add the non wild cards, -1 for skip, -2 for draw 2
+	//generate and add the non wild cards, -1 for skip, -2 for draw 2, -3 for reverse
 	for(int c = 0; c < 4; c++){
 		switch(c){
 			case(0):
@@ -82,7 +83,7 @@ void Deck::generateDeck(){
 			case(3):
 				color = 'g';
 		}
-		for(int i = -2; i < 10; i++){
+		for(int i = -3; i < 10; i++){
 			Card current;
 			current.color = color;
 			current.value = i;

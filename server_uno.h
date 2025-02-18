@@ -16,6 +16,7 @@ class Deck{
 			std::cout << card.value << card.color << '\n';
 		}
 		void drawCard(int player);
+		bool clock = true;
 		bool processInput(int player, int input);
 	private:
 		std::vector<Card> draw_pile;
