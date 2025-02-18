@@ -6,26 +6,35 @@
 #include <ranges>
 #include <iostream>
 
+void Deck::printHand(int player){
+  //must be a player num <= player count
+  for(size_t i = 0; i < players.at(player).hand.size(); i++){
+    printCard(players.at(player).hand.at(i));
+  }
+  std::cout << '\n';
+}
+
 void Deck::dealCards(std::vector<std::string> names){
   if(names.size() == 0 || names.size() > 10)
     std::cerr << "Wrong number of players\n";
   for(size_t i = 0; i < names.size(); i++){
     Player person;
     person.name = names.at(i);
+    //this is always safe since max player count 10 is smaller than deck size, so no need to check
     for(int c = 0; c < 7; c++){
-      //TODO person.hand.push_back(//NEED to remove top card from stack!
+      person.hand.push_back(draw_pile.back());
+      draw_pile.pop_back();
     }
     players.push_back(person);
   }
-
+  discard_pile.push_back(draw_pile.back());
+  draw_pile.pop_back();
 }
 
 void Deck::shuffle(){
   int seed = 42;
   auto rng = std::default_random_engine(seed);
   std::ranges::shuffle(draw_pile, rng);
-  for(size_t i = 0; i < draw_pile.size(); i++) //test output, remove later
-    std::cout << draw_pile.at(i).value << draw_pile.at(i).color << '\n';
 }
 
 void Deck::generateDeck(){
