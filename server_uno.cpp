@@ -51,8 +51,6 @@ bool Deck::processInput(int player, int input){
 	if(play.value == discard_pile.back().value || play.color == discard_pile.back().color || play.color == 'w'){
 		discard_pile.push_back(play);
 		players.at(player).hand.erase (players.at(player).hand.begin()+input);
-		if(play.value == -3)
-			clock = !clock;
 		if(play.color == 'w'){
 			//need client info, for now dummy card)
 			Card dummy;
@@ -93,7 +91,7 @@ void Deck::generateDeck(){
 		}
 	}
 	color = 'w';
-	int number = 0;
+	int number = -4;
 	for(int i = 0; i < 2; i++){
 		for(int j = 0; j < 4; j++){
 			Card current;
@@ -101,6 +99,6 @@ void Deck::generateDeck(){
 			current.value = number;
 			draw_pile.push_back(current);
 		}
-		number = -4;
+		number = -5;
 	}
 }

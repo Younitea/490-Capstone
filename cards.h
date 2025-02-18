@@ -17,6 +17,6 @@ struct Player{
 
 #endif
 
-//value 0 to 9, -1 for skip, -2 for draw r, g, b, y
+//value 0 to 9, -1 for skip, -2 for draw, -3 for reverse r, g, b, y
 //wild's color is w before playing and then set to one above after DOESN'T WORK, need to be able to shuffle card back in
-//then value is 0 for wild, and -4 for draw 4, 
+//then value is -4 for wild, and -5 for draw 4, 
