@@ -15,6 +15,8 @@ class Deck{
 		void printCard(Card card){
 			std::cout << card.value << card.color << '\n';
 		}
+		void drawCard(int player);
+		bool processInput(int player, int input);
 	private:
 		std::vector<Card> draw_pile;
 		std::vector<Player> players;

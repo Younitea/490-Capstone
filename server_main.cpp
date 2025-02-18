@@ -20,7 +20,15 @@ int main(){
 			if(input == -1)
 				break;
 			//input validation needed
-			//uno.process_input(i, input);
+			int attempts = 0;
+			while(!uno.processInput(i, input)){
+				attempts++;
+				if(attempts >= 3){
+					uno.drawCard(i);
+					break;
+				}
+				std::cin >> input;
+			}
 		}
 	}
 }

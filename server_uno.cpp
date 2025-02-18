@@ -6,6 +6,11 @@
 #include <ranges>
 #include <iostream>
 
+void Deck::drawCard(int player){
+	players.at(player).hand.push_back(draw_pile.back());
+	draw_pile.pop_back();
+}
+
 void Deck::printHand(int player){
 	//must be a player num <= player count
 	for(size_t i = 0; i < players.at(player).hand.size(); i++){
@@ -37,24 +42,27 @@ void Deck::shuffle(){
 	std::ranges::shuffle(draw_pile, rng);
 }
 
-bool Deck::validateInput(int player, int input){
+bool Deck::processInput(int player, int input){
 	if(input < 0)
 		return false;
-	if(players.at(player).hand.size() > input)
+	if(players.at(player).hand.size() <= input)
 		return false;
 	Card play = players.at(player).hand.at(input);
 	if(play.value == discard_pile.back().value || play.color == discard_pile.back().color || play.color == 'w'){
 		discard_pile.push_back(play);
 		players.at(player).hand.erase (players.at(player).hand.begin()+input);
+	
+		if(play.color == 'w'){
+			//need client info, for now dummy card)
+			Card dummy;
+			dummy.color = 'r';
+			dummy.value = 1;
+			dummy.shuffle = false;
+			discard_pile.push_back(dummy);
+		}
+		return true;
 	}
-	if(play.color == 'w'){
-		//need client info, for now dummy card)
-		Card dummy;
-		dummy.color = 'r';
-		dummy.value = '1';
-		dummy.shuffle = false;
-		discard_pile.push_back(dummy)
-	}
+	return false;
 }
 
 void Deck::generateDeck(){
