@@ -7,7 +7,6 @@
 struct Card{
 	char color;
 	int value;
-	bool shuffle = true;
 };
 
 struct Player{
@@ -18,5 +17,6 @@ struct Player{
 #endif
 
 //value 0 to 9, -1 for skip, -2 for draw, -3 for reverse r, g, b, y
-//wild's color is w before playing and then set to one above after DOESN'T WORK, need to be able to shuffle card back in
-//then value is -4 for wild, and -5 for draw 4, 
+//then value is -4 for wild, and -5 for draw 4
+//
+//when processing, a fake card will be added for the wild with inputted color and value 10, this will be removed after the next valid play

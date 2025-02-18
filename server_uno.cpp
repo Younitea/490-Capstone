@@ -7,6 +7,18 @@
 #include <iostream>
 
 void Deck::drawCard(int player){
+  if(draw_pile.size() == 0){
+    if(discard_pile.size() == 1)
+      return;
+    //don't draw or shuffle if we have no cards left, some poor sucker has everything in hand, sheesh
+    Card top = discard_pile.back();
+    discard_pile.pop_back();
+    //save and remove last card from discard pile, then merge discard and draw, and then shuffle
+    draw_pile.insert(draw_pile.end(), discard_pile.begin(), discard_pile.end());
+    discard_pile.clear();
+    discard_pile.push_back(top);
+    shuffle();
+  }
 	players.at(player).hand.push_back(draw_pile.back());
 	draw_pile.pop_back();
 }
@@ -49,16 +61,17 @@ bool Deck::processInput(int player, int input){
 		return false;
 	Card play = players.at(player).hand.at(input);
 	if(play.value == discard_pile.back().value || play.color == discard_pile.back().color || play.color == 'w'){
-		discard_pile.push_back(play);
+		if(discard_pile.back().value == 10)
+      discard_pile.pop_back();
+    //remove the wild card leftovers
+    discard_pile.push_back(play);
 		players.at(player).hand.erase (players.at(player).hand.begin()+input);
-		if(play.color == 'w'){
-			//need client info, for now dummy card)
-			Card dummy;
-			dummy.color = 'r';
-			dummy.value = 1;
-			dummy.shuffle = false;
-			discard_pile.push_back(dummy);
-		}
+    if(players.at(player).hand.size() == 0){
+      Card win;
+      win.value = 99;
+      win.color = 'v';
+      discard_pile.push_back(win);
+    }
 		return true;
 	}
 	return false;
