@@ -30,7 +30,7 @@ int main(){
   Deck uno;
   uno.generateDeck();
   uno.shuffle();
-  std::vector<std::string> players = {"1","2"};
+  std::vector<std::string> players = {"1","2","3"};
   uno.dealCards(players);
   int input = 0;
   bool clock = true;

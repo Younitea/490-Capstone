@@ -57,7 +57,7 @@ void Deck::shuffle(){
 bool Deck::processInput(int player, int input){
 	if(input < 0)
 		return false;
-	if(players.at(player).hand.size() <= input)
+	if((int)players.at(player).hand.size() <= input)
 		return false;
 	Card play = players.at(player).hand.at(input);
 	if(play.value == discard_pile.back().value || play.color == discard_pile.back().color || play.color == 'w'){
