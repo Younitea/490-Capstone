@@ -1,3 +1,37 @@
 +4 wilds can be played at any time, with no other conditions
 You do not need to call UNO when playing the penultimate card
 The discard pile is shuffled back in as needed
+
+Network packet setup: server -> client
+[int packet type (0 for information with no response (eg, +2 card played, 3 strikes into draw, etc), 1 for response expected, 2 invalid response try again
+[int player_ID, int opponent_count, bool direction (true for clockwise)]
+[int hand count: hand information (comma seperated card values from of #:card (place in handm then the actual card data))] //only part encrypted
+[current top card]
+[for each opponent (ID, cards in hand)]
+
+client -> server
+[int resposne_type] 0 = draw, 1 card play, 2 wild card play
+[int card number] 1 and 2 only
+[char color] 2 only
+
+Typical setup would be
+
+Server		Client
+1	->		//send playstate
+	<-	1	//send card to play
+0	->		//done, updated boardstate
+
+if prior opponent played draw or skip
+
+Server
+0	->		//no response expected, just client update
+
+A bad client
+
+1	-> 		//playstate
+	<-	1	//card attempt 1
+2	->		//bad response
+	<-	1	//card attempt 2
+2	->		//bad respone
+	<-	1	//card attempt 3
+0	->		//forced draw 1, end turn
