@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <string>
+#include "netinet/in.h"
 
 struct Card{
 	char color;
@@ -12,6 +13,9 @@ struct Card{
 struct Player{
 	std::vector<Card> hand;
 	std::string name;
+  uint32_t id = 0;
+  int socketDesc = 0;
+  sockaddr_in address{};
 };
 
 #endif
