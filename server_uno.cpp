@@ -6,6 +6,11 @@
 #include <ranges>
 #include <iostream>
 
+void Deck::addPlayer(struct Player player){
+  players.push_back(player);
+  //to make adding players one way only
+}
+
 void Deck::drawCard(int player){
   if(draw_pile.size() == 0){
     if(discard_pile.size() == 1)
@@ -31,18 +36,15 @@ void Deck::printHand(int player){
 	std::cout << '\n';
 }
 
-void Deck::dealCards(std::vector<std::string> names){
-	if(names.size() == 0 || names.size() > 10)
+void Deck::dealCards(int player_count){
+	if(player_count <= 0 || player_count > 10)
 		std::cerr << "Wrong number of players\n";
-	for(size_t i = 0; i < names.size(); i++){
-		Player person;
-		person.name = names.at(i);
+	for(int i = 0; i < player_count; i++){
 		//this is always safe since max player count 10 is smaller than deck size, so no need to check
 		for(int c = 0; c < 7; c++){
-			person.hand.push_back(draw_pile.back());
+			players.at(i).hand.push_back(draw_pile.back());
 			draw_pile.pop_back();
 		}
-		players.push_back(person);
 	}
 	discard_pile.push_back(draw_pile.back());
 	draw_pile.pop_back();
@@ -94,7 +96,7 @@ void Deck::generateDeck(){
 			case(3):
 				color = 'g';
 		}
-		for(int i = -3; i < 10; i++){
+		for(int8_t i = -3; i < 10; i++){
 			Card current;
 			current.color = color;
 			current.value = i;
@@ -104,7 +106,7 @@ void Deck::generateDeck(){
 		}
 	}
 	color = 'w';
-	int number = -4;
+	int8_t number = -4;
 	for(int i = 0; i < 2; i++){
 		for(int j = 0; j < 4; j++){
 			Card current;

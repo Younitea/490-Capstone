@@ -7,7 +7,7 @@
 
 struct Card{
 	char color;
-	int value;
+	int8_t value;
 };
 
 struct Player{
