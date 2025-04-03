@@ -5,11 +5,9 @@
 #include <unistd.h>
 #include <iostream>
 
-#define ACTION_B_COUNT 1
-#define START_COMMAND 10
-#define START_PACKET_SIZE 1
-
 using namespace std;
+
+#define PACKET_SIZE 2000
 
 int lookup_and_connect(const char *host, const char *service) {
   struct addrinfo hints;
@@ -48,8 +46,12 @@ int lookup_and_connect(const char *host, const char *service) {
   return s;
 }
 
-void printCard(char color, int value){
+void printCard(char color, int value, int position){
   //color first
+  if(position != -1)
+    cout << position << ": ";
+  else
+    cout << "Card to match: ";
   if(color != 'w'){
     switch(color){
       case 'r':
@@ -90,8 +92,73 @@ void printCard(char color, int value){
   }
 }
 
+int sendDraw(const int socket){
+  char packet[DRAW_PACKET_SIZE];
+  uint8_t action = DRAW_COMMAND;
+  memcpy(packet, &action, ACTION_B_COUNT); // copy the action command
+  int bytes_sent = 0;
+  int packet_size = sizeof(packet);
+  int current_send = 0;
+  while(bytes_sent != packet_size){
+    current_send = send(socket,packet+bytes_sent,packet_size-bytes_sent,0);
+    if (current_send == -1){
+      return current_send;
+    }
+    bytes_sent += current_send;
+  }
+  return bytes_sent;
+}
 
-void printHand(char (&message)[1205]){
+int sendCard(const int socket, int8_t card){
+  char packet[PLAY_PACKET_SIZE];
+  uint8_t action = PLAY_COMMAND;
+  memcpy(packet, &action, ACTION_B_COUNT);
+  memcpy(packet+ACTION_B_COUNT, &card, sizeof(int8_t));
+  int bytes_sent = 0;
+  int packet_size = sizeof(packet);
+  int current_send = 0;
+  while(bytes_sent != packet_size){
+    current_send = send(socket,packet+bytes_sent,packet_size-bytes_sent,0);
+    if (current_send == -1){
+      return current_send;
+    }
+    bytes_sent += current_send;
+  }
+  return bytes_sent;
+}
+
+//the int here is the card's position in the hand, not the value, since uno deck is <127, won't go over size
+int sendWildCard(const int socket, int8_t card, char color){
+  char packet[PLAY_WILD_SIZE];
+  uint8_t action = PLAY_WILD_COMMAND;
+  memcpy(packet, &action, ACTION_B_COUNT);
+  memcpy(packet+ACTION_B_COUNT, &card, sizeof(int8_t));
+  memcpy(packet+ACTION_B_COUNT+sizeof(int8_t), &color, sizeof(char));
+  int bytes_sent = 0;
+  int packet_size = sizeof(packet);
+  int current_send = 0;
+  while(bytes_sent != packet_size){
+    current_send = send(socket,packet+bytes_sent,packet_size-bytes_sent,0);
+    if (current_send == -1){
+      return current_send;
+    }
+    bytes_sent += current_send;
+  }
+  return bytes_sent;
+}
+
+void printInfo(char (&message)[PACKET_SIZE]){
+  int size = sizeof(int);
+  int id;
+  int p_count;
+  int next;
+  memcpy(&id, message + ACTION_B_COUNT, size);
+  memcpy(&p_count, message + ACTION_B_COUNT + size, size);
+  memcpy(&next, message + ACTION_B_COUNT + size + size, size);
+  cout << "You are: " << id << " facing " << (p_count-1) << " players, and player number " << next << " is next\n";
+}
+
+void printHand(char (&message)[PACKET_SIZE]){
   uint8_t hand_size = 0;
   memcpy(&hand_size, message + ACTION_B_COUNT, sizeof(uint8_t));
   if(hand_size == 0){
@@ -106,71 +173,65 @@ void printHand(char (&message)[1205]){
     for(uint8_t i = 0; i < hand_size; i++){
       memcpy(&cur_color, message + base_offset + (i * offset), sizeof(char));
       memcpy(&cur_value, message + base_offset + sizeof(char) + (i * offset), sizeof(int8_t));
-      printCard(cur_color, (int)cur_value);
+      printCard(cur_color, (int)cur_value, i);
     }
   }
 }
 
-int startGame(const int socket);
+void printTop(char (&message)[PACKET_SIZE]){
+  int8_t value;
+  char color;
+  memcpy(&value, message+ACTION_B_COUNT, sizeof(int8_t));
+  memcpy(&color, message+ACTION_B_COUNT+sizeof(int8_t), sizeof(char));
+  printCard(color, value, -1);
+}
 
 int main(int argc, char *argv[]){
   vector<Card> hand;
   char *host = argv[1];
   int port = atoi(argv[2]);
-  string input;
   int socket = lookup_and_connect(host, argv[2]);
   cout << socket << endl;
   bool game_running = true;
 
   uint8_t flag = 0;
 
-  char recvMsg[1205] = {'\0'};
+  char recvMsg[PACKET_SIZE] = {'\0'};
 
   while(game_running){
-    getline(cin, input);
-    if(input == "START"){
-      int bytes_sent = startGame(socket);
-      if (bytes_sent != START_PACKET_SIZE) {
-        cerr << "Error sending join packet\n";
-      }
+    int rec = recv(socket, recvMsg, sizeof(recvMsg), 0);
+    if (rec < 0) {
+      perror("ERROR in recv() call");
+      close(socket);
+      exit(1);
+    } else if (rec == 0) {
+      cout << "Socket " << socket << " closed" << endl;
+      game_running = false;
+      continue;
     }
-    if(input == "LISTEN"){
-      int rec = recv(socket, recvMsg, sizeof(recvMsg), 0);
-      if (rec < 0) {
-        perror("ERROR in recv() call");
-        close(socket);
-        exit(1);
-      } else if (rec == 0) {
-        cout << "Socket " << socket << " closed" << endl;
-        game_running = false;
+    else {
+      cout << "something recieved!\n";
+      memcpy(&flag, recvMsg, sizeof(flag));
+      if(flag == GAME_INFO_FLAG){
+        printInfo(recvMsg);
+        recvMsg[0] = '\0';
         continue;
       }
-        else {
-          cout << "something recieved!\n";
-          memcpy(&flag, recvMsg, sizeof(flag));
-          if(flag == 4){
-            printHand(recvMsg);
-            recvMsg[0] = '\0';
-          }
+      if(flag == HAND_INFO_FLAG){
+        printHand(recvMsg);
+        recvMsg[0] = '\0';
+        continue;
+      }
+      if(flag == TOP_INFO_FLAG){
+        printTop(recvMsg);
+        recvMsg[0] = '\0';
+        int input;
+        cin >> input;
+        if(PLAY_PACKET_SIZE != sendCard(socket, input))
+          cout << "Bad send\n";
+        continue;
       }
     }
   }
   cout << "game over";
-}
-
-int startGame(const int socket){
-  char packet[START_PACKET_SIZE];
-  uint8_t action = START_COMMAND;
-  memcpy(packet, &action, ACTION_B_COUNT); // copy the action command
-  int bytes_sent = 0;
-  int packet_size = sizeof(packet);
-  int current_send = 0;
-  while(bytes_sent != packet_size){
-    current_send = send(socket,packet+bytes_sent,packet_size-bytes_sent,0);
-    if (current_send == -1){
-      return current_send;
-    }
-    bytes_sent += current_send;
-  }
-  return bytes_sent;
 }

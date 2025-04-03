@@ -5,9 +5,10 @@
 #include <iostream>
 #include <vector>
 #include <unistd.h>
+#include <chrono>
+#include <thread>
 
 #define MAX_PENDING 5
-#define HAND_INFO_FLAG 4
 #define ACTION_B_COUNT 1
 
 int find_max_fd(const fd_set *fs) {
@@ -72,21 +73,41 @@ int calcNextPlayer(int count, int current, bool clock){
   return current;
 }
 
-char getWildInput(){
-  // needs to be a r,g,b,y will break otherwise, will do more validation checking later
-  std::cout << "input color\n";
-  char color;
-  std::cin >> color;
-  return color;
+bool checkWildInput(char color){
+  bool valid = false;
+  if(color == 'r' || color == 'g' || color == 'b' || color == 'y')
+    valid = true;
+  return valid;
 }
 
+bool sendGameInfo(int socket, int id, int player_count, bool direction){
+  char packet[GAME_INFO_SIZE];
+  uint8_t action = GAME_INFO_FLAG;
+  memcpy(packet, &action, ACTION_B_COUNT);
+  memcpy(packet+ACTION_B_COUNT, &id, sizeof(int));
+  int next_player = calcNextPlayer(player_count, id, direction);
+  memcpy(packet+ACTION_B_COUNT+sizeof(int), &next_player, sizeof(int));
+  memcpy(packt+ACTION_B_COUNT+(sizeof(int)*2), &player_count, sizeof(int));:
+
+  int bytes_sent = 0;
+  int packet_size = sizeof(packet);
+  int current_send = 0;
+  while(bytes_sent != packet_size){
+    current_send = send(socket,packet+bytes_sent,packet_size-bytes_sent,0);
+    if (current_send == -1){
+      return current_send;
+    }
+    bytes_sent += current_send;
+  }
+  return (bytes_sent == GAME_INFO_SIZE);
+}
 
 bool sendHandInfo(int socket, std::vector<Card> cards){
   //given a deck of 108 cards with 16 bytes per card, max size is only ever 1728 + 1 for hand indicator + 1 for for hand size int
   char packet[1730];
   uint8_t action = HAND_INFO_FLAG;
   memcpy(packet, &action, ACTION_B_COUNT);
-  
+
   //safe as there is only 108 cards, something has gone horribly wrong otherwise lol
   uint8_t hand_size = (uint8_t) cards.size();
   memcpy(packet+ACTION_B_COUNT, &hand_size, sizeof(uint8_t));
@@ -116,12 +137,41 @@ bool sendHandInfo(int socket, std::vector<Card> cards){
   return (bytes_sent == 1730);
 }
 
+bool sendOppInfo(int socket, std::vector<Player> players){
+  //int bytes_sent = 0;
+  //TODO, will come back around too
+  //int packet_length;
+  return true; //(bytes_sent == packet_length); 
+}
+
+bool sendTopCard(int socket, Card card){
+  char packet[TOP_INFO_SIZE];
+  uint8_t action = TOP_INFO_FLAG;
+  int8_t val = card.value;
+  char color = card.color;
+  memcpy(packet, &action, ACTION_B_COUNT);
+  memcpy(packet+ACTION_B_COUNT, &val, sizeof(int8_t));
+  memcpy(packet+ACTION_B_COUNT+sizeof(int8_t), &color, sizeof(char));
+
+  int bytes_sent = 0;
+  int packet_size = sizeof(packet);
+  int current_send = 0;
+  while(bytes_sent != packet_size){
+    current_send = send(socket,packet+bytes_sent,packet_size-bytes_sent,0);
+    if (current_send == -1){
+      return current_send;
+    }
+    bytes_sent += current_send;
+  }
+  return (bytes_sent == TOP_INFO_SIZE);
+}
 
 int main(int argc, char* argv[]){
   const char* SERVER_PORT= argv[1];
   int player_count = 0;
+  int max_player_count = atoi(argv[2]);
 
-  char recvMsg[1205] = {'\0'};
+  char recvMsg[3] = {'\0'}; //only need at most 3 bytes lol, 1 for the flag, 2 for the card, and 3 for the color of the wild
 
   Deck uno;
 
@@ -132,8 +182,7 @@ int main(int argc, char* argv[]){
   int listenSocket = bind_and_listen(SERVER_PORT);
   FD_SET(listenSocket, &allSockets);
   int maxSocket = listenSocket;
-  bool game_setup = false;
-  while(!game_setup){
+  while(player_count < max_player_count){
     callSet = allSockets;
     int numS = select(maxSocket + 1, &callSet, nullptr, nullptr, nullptr);
     if (numS < 0) {
@@ -159,30 +208,7 @@ int main(int argc, char* argv[]){
         player_count++;
         continue;
       }
-      else{
-        int rec = recv(s, recvMsg, sizeof(recvMsg), 0);
-        if (rec < 0) {
-          std::perror("ERROR in recv() call");
-          close(s);
-          exit(1);
-        } else if (rec == 0) {
-          std::cout << "Socket " << s << " closed\n";
-          FD_CLR(s, &allSockets);
-          continue;
-        }
-        else{
-          std::cout << "Socket val " << rec << "for " << s << "alive\n";
-          memcpy(&action, recvMsg, sizeof(action));
-          for (int i = 0; i < player_count; i++) {
-            if (uno.players.at(i).socketDesc == s){
-              if(action == 10){
-                game_setup = true;
-                recvMsg[0] = '\0';
-              }
-            }
-          }
-        }
-      }
+
     }
   }
 
@@ -191,35 +217,74 @@ int main(int argc, char* argv[]){
   uno.generateDeck();
   uno.shuffle();
   uno.dealCards(player_count);
-  int input = 0;
   bool clock = true;
   int i = 0;
-  while(input != -1){
+  while(true){
+    loopstart:
+    action = 0;
+    int8_t card_position = -1;
+    char wild_color = 'E';
     i = calcNextPlayer(player_count, i, clock);
     Card top = uno.discard_pile.back();
     uno.printCard(top);
     std::cout << '\n';
+    if(sendGameInfo(uno.players.at(i).socketDesc, i, player_count, clock)){
+      std::cout << "game info sent\n";
+    }
+    else{
+      std::cerr << "game info send error\n";
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(20)); 
+    //attempting to debug why client only gets stuff 2/3rds of the time, despite this always saying it sent
+    //REMOVE 3 SLEEPS LATER IF OTHER SOLUTION FOUND/THIS DOESN'T WORK (duh)
     if(sendHandInfo(uno.players.at(i).socketDesc, uno.players.at(i).hand)){
       std::cout << "hand info sent\n";
     }
     else{
-      std::cerr << "send error\n";
+      std::cerr << "hand info send error\n";
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    if(sendTopCard(uno.players.at(i).socketDesc, top)){
+      std::cout << "top card sent\n";
+    }
+    else{
+      std::cerr << "top card send error\n";
     }
 
     uno.printHand(i);
 
-    std::cin >> input;
-    if(input == -1)
-      break;
-    //input validation needed
-    int attempts = 0;
-    while(!uno.processInput(i, input)){
-      attempts++;
-      if(attempts >= 3){
-        uno.drawCard(i);
-        break;
+    int s = uno.players.at(i).socketDesc;
+    int rec = recv(s, recvMsg, sizeof(recvMsg), 0);
+    if (rec < 0) {
+      std::perror("ERROR in recv() call");
+      close(s);
+      exit(1);
+    } else if (rec == 0) {
+      std::cout << "Socket " << s << " closed\n";
+      FD_CLR(s, &allSockets);
+      continue;
+    }
+    else{
+      std::cout << "Socket val " << rec << "for " << s << "alive\n";
+      memcpy(&action, recvMsg, sizeof(ACTION_B_COUNT));
+      switch(action){
+        case(1):
+          uno.drawCard(i);
+          goto loopstart;
+        case(2):
+          memcpy(&card_position, recvMsg+ACTION_B_COUNT, sizeof(int8_t));
+          break;
+        case(3):
+          memcpy(&wild_color, recvMsg+ACTION_B_COUNT+sizeof(int8_t), sizeof(char));
+          break;
+        default:
+          std::cerr << "bad client respsonse\n";
+          break;
       }
-      std::cin >> input;
+    }
+    if(!uno.processInput(i, card_position)){
+        uno.drawCard(i);
+        continue;
     }
     if(uno.discard_pile.back().color == 'v'){
       std::cout << "Player: " << " wins!\n";
@@ -250,17 +315,20 @@ int main(int argc, char* argv[]){
         i = calcNextPlayer(player_count, i, clock);
         for(int d = 0; d < 4; d++)
           uno.drawCard(i);
-        char wild = getWildInput();
+        if(!checkWildInput(wild_color))
+          wild_color = 'E';
         Card dummy;
-        dummy.color = wild;
+        dummy.color = wild_color;
         dummy.value = 10;
         uno.discard_pile.push_back(dummy);
+        
         //skip next turn, draw them 4, and make a dummy color
       }
       else if(val == -4){
-        char wild = getWildInput();
+        if(!checkWildInput(wild_color))
+          wild_color = 'E';
         Card dummy;
-        dummy.color = wild;
+        dummy.color = wild_color;
         dummy.value = 10;
         uno.discard_pile.push_back(dummy);
         //make a dummy card to indicate next color

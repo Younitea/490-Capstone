@@ -5,6 +5,25 @@
 #include <string>
 #include "netinet/in.h"
 
+#define DRAW_COMMAND 1
+#define DRAW_PACKET_SIZE 1
+
+#define PLAY_COMMAND 2
+#define PLAY_PACKET_SIZE 2
+
+#define PLAY_WILD_COMMAND 3
+#define PLAY_WILD_SIZE 3
+
+#define GAME_INFO_SIZE 13
+#define GAME_INFO_FLAG 4
+
+#define HAND_INFO_FLAG 5
+
+#define TOP_INFO_SIZE 3
+#define TOP_INFO_FLAG 7
+
+#define ACTION_B_COUNT 1
+
 struct Card{
 	char color;
 	int8_t value;
