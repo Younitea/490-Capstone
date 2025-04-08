@@ -137,7 +137,7 @@ bool sendHandInfo(int socket, std::vector<Card> cards){
   return (bytes_sent == packet_size);
 }
 
-bool sendOppInfo(int socket, std::vector<Player> players){
+bool sendOppInfo(int socket, std::vector<Player> &players){
   int bytes_sent = 0;
   int packet_length = 73; //1 for the flag, 2 ints per player, less current player)
   char packet[73];
@@ -158,7 +158,7 @@ bool sendOppInfo(int socket, std::vector<Player> players){
     }
     bytes_sent += current_send;
   }
-  return (bytes_sent == packet_length); //(bytes_sent == packet_length); 
+  return (bytes_sent == packet_length); 
 }
 
 bool sendTopCard(int socket, Card card){
@@ -245,27 +245,28 @@ loopstart:
     Card top = uno.discard_pile.back();
     uno.printCard(top);
     std::cout << '\n';
+    std::this_thread::sleep_for(std::chrono::milliseconds(40));
     if(sendGameInfo(uno.players.at(i).socketDesc, i, player_count, clock)){
       std::cout << "game info sent\n";
     }
     else{
       std::cerr << "game info send error\n";
     }
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    std::this_thread::sleep_for(std::chrono::milliseconds(40));
     if(sendHandInfo(uno.players.at(i).socketDesc, uno.players.at(i).hand)){
       std::cout << "hand info sent\n";
     }
     else{
       std::cerr << "hand info send error\n";
     }
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    std::this_thread::sleep_for(std::chrono::milliseconds(40));
     if(sendOppInfo(uno.players.at(i).socketDesc, uno.players)){
       std::cout << "Opponent info sent\n";
     }
     else{
       std::cerr << "opponent info send error\n";
     }
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    std::this_thread::sleep_for(std::chrono::milliseconds(40));
     if(sendTopCard(uno.players.at(i).socketDesc, top)){
       std::cout << "top card sent\n";
     }
