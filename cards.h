@@ -19,6 +19,8 @@
 
 #define HAND_INFO_FLAG 5
 
+#define OPPONENT_INFO 6
+
 #define TOP_INFO_SIZE 3
 #define TOP_INFO_FLAG 7
 

@@ -87,7 +87,7 @@ bool sendGameInfo(int socket, int id, int player_count, bool direction){
   memcpy(packet+ACTION_B_COUNT, &id, sizeof(int));
   int next_player = calcNextPlayer(player_count, id, direction);
   memcpy(packet+ACTION_B_COUNT+sizeof(int), &next_player, sizeof(int));
-  memcpy(packt+ACTION_B_COUNT+(sizeof(int)*2), &player_count, sizeof(int));:
+  memcpy(packet+ACTION_B_COUNT+(sizeof(int)*2), &player_count, sizeof(int));
 
   int bytes_sent = 0;
   int packet_size = sizeof(packet);
@@ -134,14 +134,31 @@ bool sendHandInfo(int socket, std::vector<Card> cards){
     }
     bytes_sent += current_send;
   }
-  return (bytes_sent == 1730);
+  return (bytes_sent == packet_size);
 }
 
 bool sendOppInfo(int socket, std::vector<Player> players){
-  //int bytes_sent = 0;
-  //TODO, will come back around too
-  //int packet_length;
-  return true; //(bytes_sent == packet_length); 
+  int bytes_sent = 0;
+  int packet_length = 73; //1 for the flag, 2 ints per player, less current player)
+  char packet[73];
+  uint8_t action = OPPONENT_INFO;
+  memcpy(packet, &action, ACTION_B_COUNT);
+  for(int i = 0; i < (int)players.size(); i++){
+    if(i != socket){
+      int count = (int)players.at(i).hand.size();
+      memcpy(packet+ACTION_B_COUNT+(i*sizeof(int)*2), &i, sizeof(int));
+      memcpy(packet+ACTION_B_COUNT+sizeof(int)+(i*sizeof(int)*2), &count, sizeof(int));
+    }
+  }
+  int current_send = 0;
+  while(bytes_sent != packet_length){
+    current_send = send(socket,packet+bytes_sent,packet_length-bytes_sent,0);
+    if (current_send == -1){
+      return current_send;
+    }
+    bytes_sent += current_send;
+  }
+  return (bytes_sent == packet_length); //(bytes_sent == packet_length); 
 }
 
 bool sendTopCard(int socket, Card card){
@@ -220,7 +237,7 @@ int main(int argc, char* argv[]){
   bool clock = true;
   int i = 0;
   while(true){
-    loopstart:
+loopstart:
     action = 0;
     int8_t card_position = -1;
     char wild_color = 'E';
@@ -234,14 +251,19 @@ int main(int argc, char* argv[]){
     else{
       std::cerr << "game info send error\n";
     }
-    std::this_thread::sleep_for(std::chrono::milliseconds(20)); 
-    //attempting to debug why client only gets stuff 2/3rds of the time, despite this always saying it sent
-    //REMOVE 3 SLEEPS LATER IF OTHER SOLUTION FOUND/THIS DOESN'T WORK (duh)
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
     if(sendHandInfo(uno.players.at(i).socketDesc, uno.players.at(i).hand)){
       std::cout << "hand info sent\n";
     }
     else{
       std::cerr << "hand info send error\n";
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    if(sendOppInfo(uno.players.at(i).socketDesc, uno.players)){
+      std::cout << "Opponent info sent\n";
+    }
+    else{
+      std::cerr << "opponent info send error\n";
     }
     std::this_thread::sleep_for(std::chrono::milliseconds(20));
     if(sendTopCard(uno.players.at(i).socketDesc, top)){
@@ -251,10 +273,9 @@ int main(int argc, char* argv[]){
       std::cerr << "top card send error\n";
     }
 
-    uno.printHand(i);
-
     int s = uno.players.at(i).socketDesc;
     int rec = recv(s, recvMsg, sizeof(recvMsg), 0);
+    uno.printHand(i);
     if (rec < 0) {
       std::perror("ERROR in recv() call");
       close(s);
@@ -268,13 +289,13 @@ int main(int argc, char* argv[]){
       std::cout << "Socket val " << rec << "for " << s << "alive\n";
       memcpy(&action, recvMsg, sizeof(ACTION_B_COUNT));
       switch(action){
-        case(1):
+        case(DRAW_COMMAND):
           uno.drawCard(i);
           goto loopstart;
-        case(2):
+        case(PLAY_COMMAND):
           memcpy(&card_position, recvMsg+ACTION_B_COUNT, sizeof(int8_t));
           break;
-        case(3):
+        case(PLAY_WILD_COMMAND):
           memcpy(&wild_color, recvMsg+ACTION_B_COUNT+sizeof(int8_t), sizeof(char));
           break;
         default:
@@ -283,8 +304,8 @@ int main(int argc, char* argv[]){
       }
     }
     if(!uno.processInput(i, card_position)){
-        uno.drawCard(i);
-        continue;
+      uno.drawCard(i);
+      continue;
     }
     if(uno.discard_pile.back().color == 'v'){
       std::cout << "Player: " << " wins!\n";
@@ -321,7 +342,7 @@ int main(int argc, char* argv[]){
         dummy.color = wild_color;
         dummy.value = 10;
         uno.discard_pile.push_back(dummy);
-        
+
         //skip next turn, draw them 4, and make a dummy color
       }
       else if(val == -4){
