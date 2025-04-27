@@ -186,11 +186,15 @@ void printHand(char (&message)[PACKET_SIZE], vector<Card> &hand){
   }
 }
 
+Card top_card;
+
 void printTop(char (&message)[PACKET_SIZE]){
   int8_t value;
   char color;
   memcpy(&value, message+ACTION_B_COUNT, sizeof(int8_t));
   memcpy(&color, message+ACTION_B_COUNT+sizeof(int8_t), sizeof(char));
+  top_card.value = value;
+  top_card.color = color;
   printCard(color, value, -1);
 }
 
@@ -226,13 +230,26 @@ void processMsg(char (&recvMsg)[PACKET_SIZE], vector<Card> &hand){
 }
 
 bool responded;
+Card* target;
+char color = 'r'; //default to red
 
 void button_cb(Fl_Widget *w, void *z){
+  target = (Card*)z;
   cout << "button pressed!\n" << (int)((*(Card*)z).value) << endl;
   responded = false;
 }
 
+void send_draw(Fl_Widget *w, void *z){
+  *((char*)z) = 'd';
+  responded = false;
+}
+
+void set_color(Fl_Widget *w, void *color_set){
+  color = *(char*)color_set;
+}
+
 int main(int argc, char *argv[]){
+  FL_NORMAL_SIZE = 24;
   char *host = argv[1];
   int port = atoi(argv[2]);
   int socket = lookup_and_connect(host, argv[2]);
@@ -241,24 +258,40 @@ int main(int argc, char *argv[]){
 
   char play;
   int pos;
-  char color;
   bool sent_status;
   vector<Card> hand;
   char msg1[PACKET_SIZE] = {'\0'};
   char msg2[PACKET_SIZE] = {'\0'};
   char msg3[PACKET_SIZE] = {'\0'};
   char msg4[PACKET_SIZE] = {'\0'};
-  Fl_Window *window = new Fl_Window(1500,900);
+  char col_opt[4] = {'r','b','y','g'};
+  Fl_Window *window = new Fl_Window(1500,950);
+  window->fullscreen();
+  Fl_Button *drawer = new Fl_Button(600, 40, 200, 40, "Press to Draw!");
+  drawer->callback(send_draw, (void*)&play);
+  Fl_Button *red = new Fl_Button(200, 40, 90, 40, "Red");
+  red->callback(set_color, (void*)&col_opt[0]);
+  Fl_Button *blue = new Fl_Button(400, 40, 90, 40, "Blue");
+  blue->callback(set_color, (void*)&col_opt[1]);
+  Fl_Button *yellow = new Fl_Button(960, 40, 90, 40, "Yellow");
+  yellow->callback(set_color, (void*)&col_opt[2]);
+  Fl_Button *green = new Fl_Button(1160, 40, 90, 40, "Green");
+  green->callback(set_color, (void*)&col_opt[3]);
+  Fl_Box *display_box = new Fl_Box(1190,200,280,360);
+  display_box->box(FL_UP_BOX);
+  display_box->labelsize(100);
+  display_box->labelfont(FL_BOLD + FL_HELVETICA);
   window->end();
   window->show();
   //swap to Fl_Button later
   Fl_Button *display[12][9] = {NULL}; //12 colums, 9 rows
   while(game_running && window->shown()){
     responded = true;
+    top_card.value = -20;
+    top_card.color = 'e';
     play = 'E';
     hand.clear();
     pos = -1;
-    color = 'e';
     sent_status = false;
     msg1[0] = '\0';
     msg2[0] = '\0';
@@ -295,9 +328,7 @@ int main(int argc, char *argv[]){
           display[col][row]->hide();
           display[col][row] = NULL;
         }
-        Fl_Button *box = new Fl_Button(20+(col*60),40+(row*70),40,50);
-        //box->box(FL_UP_BOX);
-        //box->callback(card_cb, status)
+        Fl_Button *box = new Fl_Button(20+(col*90),90+(row*100),80,90);
         box->copy_label(convert);
         char color1 = hand.at(num_cards).color;
         box->callback(button_cb, (void*)(&hand.at(num_cards)));
@@ -311,8 +342,25 @@ int main(int argc, char *argv[]){
           box->color(FL_YELLOW);
         else
           box->color(FL_GRAY);
+        box->redraw();
+        box->labelfont(FL_HELVETICA_BOLD);
+        box->labelsize(40);
+        box->labelcolor(FL_BLACK);
         display[col][row] = box;
       }
+      stringstream ss;
+      ss << (int)top_card.value;
+      string str = ss.str();
+      const char* convert = str.c_str();
+      if(top_card.color == 'r')
+        display_box->color(FL_RED);
+      else if(top_card.color == 'b')
+        display_box->color(FL_BLUE);
+      else if(top_card.color == 'g')
+        display_box->color(FL_GREEN);
+      else if(top_card.color == 'y')
+        display_box->color(FL_YELLOW);
+      display_box->label(convert);
       if(display[num_cards / 9][num_cards % 9] != NULL){
         display[num_cards / 9][num_cards % 9]->hide();
         display[num_cards / 9][num_cards % 9] = NULL;
@@ -324,22 +372,28 @@ int main(int argc, char *argv[]){
       while(responded && Fl::wait()){}
       Fl::check();
 
+      pos = (int8_t)distance(hand.data(), target);
       cout << "What would you like to do?\nd to draw, or p to play or w to play wild card\n";
-      cin >> play;
+      if(play != 'd'){
+        if(hand.at(pos).color == 'w')
+          play = 'w';
+        else
+          play = 'p';
+      }
       switch(play){
         case('d'):
           sent_status = sendDraw(socket);
           break;
         case('p'):
-          cout << "What card?\n";
-          cin >> pos;
+          cout << pos << "What card?\n";
+          //cin >> pos;
           sent_status = sendCard(socket, pos);
           break;
         case('w'):
           cout << "What card?\n";
-          cin >> pos;
+          //cin >> pos;
           cout << "What color (r,g,b, or y)\n";
-          cin >> color;
+          //cin >> color;
           sent_status = sendWildCard(socket, pos, color);
           break;
         default:
