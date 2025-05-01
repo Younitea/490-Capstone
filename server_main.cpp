@@ -81,13 +81,15 @@ bool checkWildInput(char color){
 }
 
 bool sendGameInfo(int socket, int id, int player_count, bool direction){
-  char packet[GAME_INFO_SIZE];
+  char packet[GAME_INFO_SIZE] = {0};
   uint8_t action = GAME_INFO_FLAG;
+  int idh = htonl(id);
   memcpy(packet, &action, ACTION_B_COUNT);
-  memcpy(packet+ACTION_B_COUNT, &id, sizeof(int));
-  int next_player = calcNextPlayer(player_count, id, direction);
+  memcpy(packet+ACTION_B_COUNT, &idh, sizeof(int));
+  int next_player = htonl(calcNextPlayer(player_count, id, direction));
   memcpy(packet+ACTION_B_COUNT+sizeof(int), &next_player, sizeof(int));
-  memcpy(packet+ACTION_B_COUNT+(sizeof(int)*2), &player_count, sizeof(int));
+  int player_counth = htonl(player_count);
+  memcpy(packet+ACTION_B_COUNT+(sizeof(int)*2), &player_counth, sizeof(int));
 
   int bytes_sent = 0;
   int packet_size = sizeof(packet);
@@ -99,12 +101,13 @@ bool sendGameInfo(int socket, int id, int player_count, bool direction){
     }
     bytes_sent += current_send;
   }
+  std::cout << bytes_sent << "game info" << "\n";
   return (bytes_sent == GAME_INFO_SIZE);
 }
 
 bool sendHandInfo(int socket, std::vector<Card> cards){
-  //given a deck of 108 cards with 16 bytes per card, max size is only ever 1728 + 1 for hand indicator + 1 for for hand size int
-  char packet[1730];
+  //given a deck of 108 cards with 2 bytes per card, max size is only ever 208 + 1 for hand indicator + 1 for for hand size int
+  char packet[218] = {0};
   uint8_t action = HAND_INFO_FLAG;
   memcpy(packet, &action, ACTION_B_COUNT);
 
@@ -134,26 +137,29 @@ bool sendHandInfo(int socket, std::vector<Card> cards){
     }
     bytes_sent += current_send;
   }
+  std::cout << "sent: " << bytes_sent << " hand size: " << (int)hand_size << "\n";
+  printf("msg2[0] = 0x%02x\n", (unsigned char)packet[0]);
   return (bytes_sent == packet_size);
 }
 
 bool sendOppInfo(int socket, std::vector<Player> &players){
   int bytes_sent = 0;
   int packet_length = 73; //1 for the flag, 2 ints per player, less current player)
-  char packet[73];
+  char packet[73] = {0};
   uint8_t action = OPPONENT_INFO;
   memcpy(packet, &action, ACTION_B_COUNT);
   for(int i = 0; i < (int)players.size(); i++){
     if(i != socket){
-      int count = (int)players.at(i).hand.size();
-      memcpy(packet+ACTION_B_COUNT+(i*sizeof(int)*2), &i, sizeof(int));
+      int count = htonl((int)players.at(i).hand.size());
+      int h = htonl(i);
+      memcpy(packet+ACTION_B_COUNT+(i*sizeof(int)*2), &h, sizeof(int));
       memcpy(packet+ACTION_B_COUNT+sizeof(int)+(i*sizeof(int)*2), &count, sizeof(int));
     }
   }
   int current_send = 0;
   while(bytes_sent != packet_length){
     current_send = send(socket,packet+bytes_sent,packet_length-bytes_sent,0);
-    if (current_send == -1){
+    if (current_send == -2){
       return current_send;
     }
     bytes_sent += current_send;
@@ -162,7 +168,7 @@ bool sendOppInfo(int socket, std::vector<Player> &players){
 }
 
 bool sendTopCard(int socket, Card card){
-  char packet[TOP_INFO_SIZE];
+  char packet[TOP_INFO_SIZE] = {0};
   uint8_t action = TOP_INFO_FLAG;
   int8_t val = card.value;
   char color = card.color;
@@ -245,28 +251,25 @@ loopstart:
     Card top = uno.discard_pile.back();
     uno.printCard(top);
     std::cout << '\n';
-    std::this_thread::sleep_for(std::chrono::milliseconds(40));
+    int s = uno.players.at(i).socketDesc;
     if(sendGameInfo(uno.players.at(i).socketDesc, i, player_count, clock)){
       std::cout << "game info sent\n";
     }
     else{
       std::cerr << "game info send error\n";
     }
-    std::this_thread::sleep_for(std::chrono::milliseconds(40));
     if(sendHandInfo(uno.players.at(i).socketDesc, uno.players.at(i).hand)){
       std::cout << "hand info sent\n";
     }
     else{
       std::cerr << "hand info send error\n";
     }
-    std::this_thread::sleep_for(std::chrono::milliseconds(40));
     if(sendOppInfo(uno.players.at(i).socketDesc, uno.players)){
       std::cout << "Opponent info sent\n";
     }
     else{
       std::cerr << "opponent info send error\n";
     }
-    std::this_thread::sleep_for(std::chrono::milliseconds(40));
     if(sendTopCard(uno.players.at(i).socketDesc, top)){
       std::cout << "top card sent\n";
     }
@@ -274,7 +277,6 @@ loopstart:
       std::cerr << "top card send error\n";
     }
 
-    int s = uno.players.at(i).socketDesc;
     int rec = recv(s, recvMsg, sizeof(recvMsg), 0);
     uno.printHand(i);
     if (rec < 0) {

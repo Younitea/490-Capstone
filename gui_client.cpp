@@ -11,7 +11,7 @@
 #include <sstream>
 using namespace std;
 
-#define PACKET_SIZE 2000
+#define PACKET_SIZE 250
 
 int lookup_and_connect(const char *host, const char *service) {
   struct addrinfo hints;
@@ -159,7 +159,11 @@ void printInfo(char (&message)[PACKET_SIZE]){
   memcpy(&id, message + ACTION_B_COUNT, size);
   memcpy(&next, message + ACTION_B_COUNT + size, size);
   memcpy(&p_count, message + ACTION_B_COUNT + size + size, size);
+  id = ntohl(id);
+  p_count = ntohl(p_count);
+  next = ntohl(next);
   cout << "You are: " << id << " facing " << (p_count-1) << " players, and player number " << next << " is next\n";
+
 }
 
 void printHand(char (&message)[PACKET_SIZE], vector<Card> &hand){
@@ -248,10 +252,25 @@ void set_color(Fl_Widget *w, void *color_set){
   color = *(char*)color_set;
 }
 
+string applySym(string input){
+  if(input == "-1")
+    return "S";
+  if(input == "-2")
+    return "+2";
+  if(input == "-3")
+    return "R";
+  if(input == "-4")
+    return "W";
+  if(input == "-5")
+    return "+4";
+  if(input == "10")
+    return "W";
+  return input;
+}
+
 int main(int argc, char *argv[]){
   FL_NORMAL_SIZE = 24;
   char *host = argv[1];
-  int port = atoi(argv[2]);
   int socket = lookup_and_connect(host, argv[2]);
   cout << socket << endl;
   bool game_running = true;
@@ -297,13 +316,13 @@ int main(int argc, char *argv[]){
     msg2[0] = '\0';
     msg3[0] = '\0';
     msg4[0] = '\0';
-    int rec = recv(socket, msg1, sizeof(msg1), 0);
+    int rec = recv(socket, msg1, GAME_INFO_SIZE, 0);
     game_running = (game_running && checkRec(rec, socket));
-    rec = recv(socket, msg2, sizeof(msg2), 0);
+    rec = recv(socket, msg2, 218, 0);
     game_running = (game_running && checkRec(rec, socket));
-    rec = recv(socket, msg3, sizeof(msg3), 0);
+    rec = recv(socket, msg3, 73, 0);
     game_running = (game_running && checkRec(rec, socket));
-    rec = recv(socket, msg4, sizeof(msg4), 0);
+    rec = recv(socket, msg4, TOP_INFO_SIZE, 0);
     game_running = (game_running && checkRec(rec, socket));
     if(game_running) {
       cout << "something recieved!\n";
@@ -323,6 +342,7 @@ int main(int argc, char *argv[]){
         stringstream ss;
         ss << (int)hand.at(num_cards).value;
         string str = ss.str();
+        str = applySym(str);
         const char* convert = str.c_str();
         if(display[col][row] != NULL){
           display[col][row]->hide();
@@ -351,6 +371,7 @@ int main(int argc, char *argv[]){
       stringstream ss;
       ss << (int)top_card.value;
       string str = ss.str();
+      str = applySym(str);
       const char* convert = str.c_str();
       if(top_card.color == 'r')
         display_box->color(FL_RED);

@@ -9,7 +9,7 @@
 
 using namespace std;
 
-#define PACKET_SIZE 2000
+#define PACKET_SIZE 250
 
 int lookup_and_connect(const char *host, const char *service) {
   struct addrinfo hints;
@@ -228,7 +228,6 @@ void processMsg(char (&recvMsg)[PACKET_SIZE], vector<Card> &hand, Card &top){
 int main(int argc, char *argv[]){
   vector<Card> hand;
   char *host = argv[1];
-  int port = atoi(argv[2]);
   int socket = lookup_and_connect(host, argv[2]);
   cout << socket << endl;
   bool game_running = true;
@@ -261,20 +260,18 @@ int main(int argc, char *argv[]){
     msg2[0] = '\0';
     msg3[0] = '\0';
     msg4[0] = '\0';
-
     cout << "msgs set\nprior to\n";
 
-    rec = recv(socket, msg1, sizeof(msg1), 0);
-
+    rec = recv(socket, msg1, GAME_INFO_SIZE, 0);
     cout << "rec 1\n";
     game_running = (game_running && checkRec(rec, socket));
-    rec = recv(socket, msg2, sizeof(msg2), 0);
+    rec = recv(socket, msg2, 218, 0);
     cout << "rec 2\n";
     game_running = (game_running && checkRec(rec, socket));
-    rec = recv(socket, msg3, sizeof(msg3), 0);
+    rec = recv(socket, msg3, 73, 0);
     cout << "rec 3\n";
     game_running = (game_running && checkRec(rec, socket));
-    rec = recv(socket, msg4, sizeof(msg4), 0);
+    rec = recv(socket, msg4, TOP_INFO_SIZE, 0);
     cout << "rec 4\n";
     game_running = (game_running && checkRec(rec, socket));
     
