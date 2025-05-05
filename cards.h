@@ -37,6 +37,7 @@ struct Player{
   uint32_t id = 0;
   int socketDesc = 0;
   sockaddr_in address{};
+  unsigned char key[32];
 };
 
 #endif

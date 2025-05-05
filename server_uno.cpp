@@ -5,6 +5,8 @@
 #include <random>
 #include <ranges>
 #include <iostream>
+#include <chrono>
+#include <ctime>
 
 void Deck::addPlayer(struct Player player){
   players.push_back(player);
@@ -51,7 +53,7 @@ void Deck::dealCards(int player_count){
 }
 
 void Deck::shuffle(){
-	int seed = 42;
+	int seed = std::chrono::system_clock::now().time_since_epoch().count();
 	auto rng = std::default_random_engine(seed);
 	std::ranges::shuffle(draw_pile, rng);
 }

@@ -7,6 +7,10 @@
 #include <unistd.h>
 #include <chrono>
 #include <thread>
+#include <openssl/rsa.h>
+#include <openssl/pem.h>
+#include <openssl/err.h>
+#include <openssl/rand.h>
 
 #define MAX_PENDING 5
 #define ACTION_B_COUNT 1
@@ -105,40 +109,58 @@ bool sendGameInfo(int socket, int id, int player_count, bool direction){
   return (bytes_sent == GAME_INFO_SIZE);
 }
 
-bool sendHandInfo(int socket, std::vector<Card> cards){
+bool sendHandInfo(Player &player){
   //given a deck of 108 cards with 2 bytes per card, max size is only ever 208 + 1 for hand indicator + 1 for for hand size int
-  char packet[218] = {0};
+  char packet[242] = {0};
+  unsigned char hand[216] = {0};
+  unsigned char enc_hand[224] = {0};
+  unsigned char iv[16];
+  RAND_bytes(iv, sizeof(iv));
+  EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
+  EVP_EncryptInit_ex(ctx, EVP_aes_256_cbc(), nullptr, player.key, iv);
+
   uint8_t action = HAND_INFO_FLAG;
   memcpy(packet, &action, ACTION_B_COUNT);
 
   //safe as there is only 108 cards, something has gone horribly wrong otherwise lol
-  uint8_t hand_size = (uint8_t) cards.size();
+  uint8_t hand_size = (uint8_t) player.hand.size();
   memcpy(packet+ACTION_B_COUNT, &hand_size, sizeof(uint8_t));
 
   char cur_color;
   int8_t cur_num;
 
-  int base_offset = ACTION_B_COUNT + sizeof(uint8_t);
   int offset = sizeof(char) + sizeof(int8_t);
 
   for(uint8_t i = 0; i < hand_size; i++){
-    cur_color = cards.at(i).color;
-    cur_num = cards.at(i).value;
-    memcpy(packet+base_offset+(i*offset), &cur_color, sizeof(char));
-    memcpy(packet+base_offset+(i*offset)+sizeof(char), &cur_num, sizeof(int8_t));
+    cur_color = player.hand.at(i).color;
+    cur_num = player.hand.at(i).value;
+    memcpy(hand+(i*offset), &cur_color, sizeof(char));
+    memcpy(hand+(i*offset)+sizeof(char), &cur_num, sizeof(int8_t));
   }
+
+  int len = 0; //to handle any partial after padding
+  EVP_EncryptUpdate(ctx, enc_hand, &len, hand, 216);
+  int fin_len = len;
+  EVP_EncryptFinal_ex(ctx, enc_hand + len, &len);
+  fin_len += len;
+  if(fin_len != 224)
+    std::cerr << len << ' ' << fin_len << "Hand packet size off\n";
+  EVP_CIPHER_CTX_free(ctx);
+
+  memcpy(packet + 2, iv, 16);
+  memcpy(packet + 18, enc_hand, 224);
   int bytes_sent = 0;
   int packet_size = sizeof(packet);
   int current_send = 0;
   while(bytes_sent != packet_size){
-    current_send = send(socket,packet+bytes_sent,packet_size-bytes_sent,0);
+    current_send = send(player.socketDesc,packet+bytes_sent,packet_size-bytes_sent,0);
     if (current_send == -1){
       return current_send;
     }
     bytes_sent += current_send;
   }
-  std::cout << "sent: " << bytes_sent << " hand size: " << (int)hand_size << "\n";
-  printf("msg2[0] = 0x%02x\n", (unsigned char)packet[0]);
+  std::cout << "bytes sent: " << bytes_sent << " hand size: " << (int)hand_size << "\n";
+  printf("key[3] = 0x%02x\n", (unsigned char)player.key[3]);
   return (bytes_sent == packet_size);
 }
 
@@ -189,6 +211,28 @@ bool sendTopCard(int socket, Card card){
   return (bytes_sent == TOP_INFO_SIZE);
 }
 
+RSA* load_private_key(const char* filename) {
+  FILE* fp = fopen(filename, "r");
+  if (!fp) {
+    std::cout <<  "Failed to open private key file";
+    return nullptr;
+  }
+  RSA* rsa = PEM_read_RSAPrivateKey(fp, nullptr, nullptr, nullptr);
+  fclose(fp);
+  if (!rsa) {
+    std::cerr << "Error reading private key from file\n";
+  }
+  return rsa;
+}
+
+void decrypt_key(unsigned char (&encrypted)[256], unsigned char (&decrypt)[32]){
+  RSA* rsa_priv = load_private_key("private.pem");
+  int aes_key_len = RSA_private_decrypt(256, encrypted, decrypt, rsa_priv, RSA_PKCS1_OAEP_PADDING);
+
+  if(aes_key_len != 32)
+    std::cerr << "Key problem\n";
+}
+
 int main(int argc, char* argv[]){
   const char* SERVER_PORT= argv[1];
   int player_count = 0;
@@ -202,6 +246,7 @@ int main(int argc, char* argv[]){
   FD_ZERO(&allSockets);
   FD_ZERO(&callSet);
   uint8_t action = 0;
+  unsigned char key[256];
   int listenSocket = bind_and_listen(SERVER_PORT);
   FD_SET(listenSocket, &allSockets);
   int maxSocket = listenSocket;
@@ -227,8 +272,12 @@ int main(int argc, char* argv[]){
         std::cout << "Socket " << listenSocket << " connected\n";
         struct Player player;
         player.socketDesc = as;
-        uno.addPlayer(player);
+        
         player_count++;
+        recv(as, key, sizeof(key), 0);
+        decrypt_key(key, player.key);
+        printf("key[3] = 0x%02x\n", (unsigned char)player.key[3]);
+        uno.addPlayer(player);
         continue;
       }
 
@@ -258,7 +307,7 @@ loopstart:
     else{
       std::cerr << "game info send error\n";
     }
-    if(sendHandInfo(uno.players.at(i).socketDesc, uno.players.at(i).hand)){
+    if(sendHandInfo(uno.players.at(i))){
       std::cout << "hand info sent\n";
     }
     else{

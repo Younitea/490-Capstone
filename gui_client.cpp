@@ -8,7 +8,12 @@
 #include <FL/Fl_Window.H>
 #include <FL/Fl_Box.H>
 #include <FL/Fl_Button.H>
+#include <FL/Fl_Toggle_Button.H>
 #include <sstream>
+#include <openssl/rand.h>
+#include <openssl/pem.h>
+#include <openssl/err.h>
+
 using namespace std;
 
 #define PACKET_SIZE 250
@@ -248,8 +253,13 @@ void send_draw(Fl_Widget *w, void *z){
   responded = false;
 }
 
+Fl_Toggle_Button *color_swap[4];
 void set_color(Fl_Widget *w, void *color_set){
   color = *(char*)color_set;
+  for(int i = 0; i < 4; i++){
+    color_swap[i]->value(0);
+  }
+  ((Fl_Toggle_Button*)w)->value(1);
 }
 
 string applySym(string input){
@@ -268,10 +278,30 @@ string applySym(string input){
   return input;
 }
 
+RSA* load_public_key(const char* filename) {
+  FILE* fp = fopen(filename, "r");
+  if (!fp) {
+    perror("Failed to open public key file");
+    return nullptr;
+  }
+  RSA* rsa = PEM_read_RSA_PUBKEY(fp, nullptr, nullptr, nullptr);
+  fclose(fp);
+  if (!rsa) {
+    fprintf(stderr, "Error reading public key from file\n");
+  }
+  return rsa;
+}
+
 int main(int argc, char *argv[]){
   FL_NORMAL_SIZE = 24;
   char *host = argv[1];
   int socket = lookup_and_connect(host, argv[2]);
+  unsigned char key[256] = {0};
+  unsigned char aes_key[32];
+  RAND_bytes(aes_key, sizeof(aes_key));
+  RSA* rsa_pub = load_public_key("public.pem");
+  int enc_key_len = RSA_public_encrypt(sizeof(aes_key), aes_key, key, rsa_pub, RSA_PKCS1_OAEP_PADDING);
+  send(socket, key, enc_key_len, 0);
   cout << socket << endl;
   bool game_running = true;
 
@@ -288,14 +318,23 @@ int main(int argc, char *argv[]){
   window->fullscreen();
   Fl_Button *drawer = new Fl_Button(600, 40, 200, 40, "Press to Draw!");
   drawer->callback(send_draw, (void*)&play);
-  Fl_Button *red = new Fl_Button(200, 40, 90, 40, "Red");
+  Fl_Toggle_Button *red = new Fl_Toggle_Button(200, 40, 90, 40, "Red");
+  color_swap[0] = red;
+  red->color(FL_RED);
   red->callback(set_color, (void*)&col_opt[0]);
-  Fl_Button *blue = new Fl_Button(400, 40, 90, 40, "Blue");
+  Fl_Toggle_Button *blue = new Fl_Toggle_Button(400, 40, 90, 40, "Blue");
+  color_swap[1] = blue;
+  blue->color(FL_BLUE);
   blue->callback(set_color, (void*)&col_opt[1]);
-  Fl_Button *yellow = new Fl_Button(960, 40, 90, 40, "Yellow");
+  Fl_Toggle_Button *yellow = new Fl_Toggle_Button(960, 40, 90, 40, "Yellow");
+  color_swap[2] = yellow;
+  yellow->color(FL_YELLOW);
   yellow->callback(set_color, (void*)&col_opt[2]);
-  Fl_Button *green = new Fl_Button(1160, 40, 90, 40, "Green");
+  Fl_Toggle_Button *green = new Fl_Toggle_Button(1160, 40, 90, 40, "Green");
+  color_swap[3] = green;
+  green->color(FL_GREEN);
   green->callback(set_color, (void*)&col_opt[3]);
+  red->set();
   Fl_Box *display_box = new Fl_Box(1190,200,280,360);
   display_box->box(FL_UP_BOX);
   display_box->labelsize(100);
@@ -318,7 +357,7 @@ int main(int argc, char *argv[]){
     msg4[0] = '\0';
     int rec = recv(socket, msg1, GAME_INFO_SIZE, 0);
     game_running = (game_running && checkRec(rec, socket));
-    rec = recv(socket, msg2, 218, 0);
+    rec = recv(socket, msg2, 224, 0);
     game_running = (game_running && checkRec(rec, socket));
     rec = recv(socket, msg3, 73, 0);
     game_running = (game_running && checkRec(rec, socket));

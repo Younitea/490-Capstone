@@ -4,6 +4,9 @@
 #include <cstring>
 #include <unistd.h>
 #include <iostream>
+#include <openssl/rand.h>
+#include <openssl/pem.h>
+#include <openssl/err.h>
 
 using namespace std;
 
@@ -161,6 +164,8 @@ void printInfo(char (&message)[PACKET_SIZE]){
   cout << "You are: " << id << " facing " << (p_count-1) << " players, and player number " << next << " is next\n";
 }
 
+unsigned char aes_key[32];
+
 void printHand(char (&message)[PACKET_SIZE]){
   uint8_t hand_size = 0;
   memcpy(&hand_size, message + ACTION_B_COUNT, sizeof(uint8_t));
@@ -168,14 +173,31 @@ void printHand(char (&message)[PACKET_SIZE]){
     cout << "Hand empty you won!";
     return;
   }
-  int base_offset = ACTION_B_COUNT + sizeof(uint8_t);
-  char cur_color = 'e';
-  int8_t cur_value = 0;
-  int offset = sizeof(char) + sizeof(int8_t);
-  for(uint8_t i = 0; i < hand_size; i++){
-    memcpy(&cur_color, message + base_offset + (i * offset), sizeof(char));
-    memcpy(&cur_value, message + base_offset + sizeof(char) + (i * offset), sizeof(int8_t));
-    printCard(cur_color, (int)cur_value, i);
+  else{
+    int len = 0;
+    cout << (int) hand_size << endl;
+    unsigned char cards[216];
+    unsigned char cut[224];
+    memcpy(cut, message + 18, 224);
+    unsigned char iv[16];
+    memcpy(iv, message + 2, 16);
+    EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
+    EVP_DecryptInit_ex(ctx, EVP_aes_256_cbc(), nullptr, aes_key, iv);
+    EVP_DecryptUpdate(ctx, cards, &len, cut, 224);
+    EVP_DecryptFinal_ex(ctx, cards + len, &len);
+    EVP_CIPHER_CTX_free(ctx);
+
+    
+    printf("msg2[3] = 0x%02x\n", (unsigned char)message[3]);
+    printf("msg2[19] = 0x%02x\n", (unsigned char)message[19]);
+    char cur_color = 'e';
+    int8_t cur_value = 0;
+    int offset = sizeof(char) + sizeof(int8_t);
+    for(uint8_t i = 0; i < hand_size; i++){
+      memcpy(&cur_color, cards + (i * offset), sizeof(char));
+      memcpy(&cur_value, cards + sizeof(char) + (i * offset), sizeof(int8_t));
+      printCard(cur_color, (int)cur_value, i);
+    }
   }
 }
 
@@ -220,14 +242,35 @@ bool recv_all(int socket, char (&recvMsg)[PACKET_SIZE], int expect){
     if(bytes <= 0)
       return false;
     total_rec += bytes;
+    cout << bytes << endl;
   }
   return true;
+}
+
+RSA* load_public_key(const char* filename) {
+  FILE* fp = fopen(filename, "r");
+  if (!fp) {
+    perror("Failed to open public key file");
+    return nullptr;
+  }
+  RSA* rsa = PEM_read_RSA_PUBKEY(fp, nullptr, nullptr, nullptr);
+  fclose(fp);
+  if (!rsa) {
+    fprintf(stderr, "Error reading public key from file\n");
+  }
+  return rsa;
 }
 
 int main(int argc, char *argv[]){
   vector<Card> hand;
   char *host = argv[1];
   int socket = lookup_and_connect(host, argv[2]);
+  unsigned char key[256] = {0};
+  RAND_bytes(aes_key, sizeof(aes_key));
+  RSA* rsa_pub = load_public_key("public.pem");
+  printf("msg2[3] = 0x%02x\n", (unsigned char)aes_key[3]);
+  int enc_key_len = RSA_public_encrypt(sizeof(aes_key), aes_key, key, rsa_pub, RSA_PKCS1_OAEP_PADDING);
+  send(socket, key, enc_key_len, 0);
   cout << socket << endl;
   bool game_running = true;
 
@@ -251,7 +294,7 @@ int main(int argc, char *argv[]){
     msg4[0] = '\0';
     bool rec = recv_all(socket, msg1, GAME_INFO_SIZE);
     game_running = (game_running && rec);
-    rec = recv_all(socket, msg2, 218);
+    rec = recv_all(socket, msg2, 242);
     printf("\n");
     game_running = (game_running && rec);
     rec = recv_all(socket, msg3, 73);
