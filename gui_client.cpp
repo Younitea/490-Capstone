@@ -171,6 +171,8 @@ void printInfo(char (&message)[PACKET_SIZE]){
 
 }
 
+unsigned char aes_key[32];
+
 void printHand(char (&message)[PACKET_SIZE], vector<Card> &hand){
   uint8_t hand_size = 0;
   memcpy(&hand_size, message + ACTION_B_COUNT, sizeof(uint8_t));
@@ -179,18 +181,29 @@ void printHand(char (&message)[PACKET_SIZE], vector<Card> &hand){
     return;
   }
   else{
-    int base_offset = ACTION_B_COUNT + sizeof(uint8_t);
+    int len = 0;
+    cout << (int) hand_size << endl;
+    unsigned char cards[216];
+    unsigned char cut[224];
+    memcpy(cut, message + 18, 224);
+    unsigned char iv[16];
+    memcpy(iv, message + 2, 16);
+    EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
+    EVP_DecryptInit_ex(ctx, EVP_aes_256_cbc(), nullptr, aes_key, iv);
+    EVP_DecryptUpdate(ctx, cards, &len, cut, 224);
+    EVP_DecryptFinal_ex(ctx, cards + len, &len);
+    EVP_CIPHER_CTX_free(ctx);
     char cur_color = 'e';
     int8_t cur_value = 0;
+    Card add;
     int offset = sizeof(char) + sizeof(int8_t);
     for(uint8_t i = 0; i < hand_size; i++){
-      memcpy(&cur_color, message + base_offset + (i * offset), sizeof(char));
-      memcpy(&cur_value, message + base_offset + sizeof(char) + (i * offset), sizeof(int8_t));
-      Card cur;
-      cur.value = cur_value;
-      cur.color = cur_color;
-      hand.push_back(cur);
+      memcpy(&cur_color, cards + (i * offset), sizeof(char));
+      memcpy(&cur_value, cards + sizeof(char) + (i * offset), sizeof(int8_t));
       printCard(cur_color, (int)cur_value, i);
+      add.color = cur_color;
+      add.value = cur_value;
+      hand.push_back(add);
     }
   }
 }
@@ -297,7 +310,6 @@ int main(int argc, char *argv[]){
   char *host = argv[1];
   int socket = lookup_and_connect(host, argv[2]);
   unsigned char key[256] = {0};
-  unsigned char aes_key[32];
   RAND_bytes(aes_key, sizeof(aes_key));
   RSA* rsa_pub = load_public_key("public.pem");
   int enc_key_len = RSA_public_encrypt(sizeof(aes_key), aes_key, key, rsa_pub, RSA_PKCS1_OAEP_PADDING);
@@ -357,7 +369,7 @@ int main(int argc, char *argv[]){
     msg4[0] = '\0';
     int rec = recv(socket, msg1, GAME_INFO_SIZE, 0);
     game_running = (game_running && checkRec(rec, socket));
-    rec = recv(socket, msg2, 224, 0);
+    rec = recv(socket, msg2, 242, 0);
     game_running = (game_running && checkRec(rec, socket));
     rec = recv(socket, msg3, 73, 0);
     game_running = (game_running && checkRec(rec, socket));

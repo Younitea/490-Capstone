@@ -186,10 +186,7 @@ void printHand(char (&message)[PACKET_SIZE]){
     EVP_DecryptUpdate(ctx, cards, &len, cut, 224);
     EVP_DecryptFinal_ex(ctx, cards + len, &len);
     EVP_CIPHER_CTX_free(ctx);
-
     
-    printf("msg2[3] = 0x%02x\n", (unsigned char)message[3]);
-    printf("msg2[19] = 0x%02x\n", (unsigned char)message[19]);
     char cur_color = 'e';
     int8_t cur_value = 0;
     int offset = sizeof(char) + sizeof(int8_t);
@@ -268,7 +265,6 @@ int main(int argc, char *argv[]){
   unsigned char key[256] = {0};
   RAND_bytes(aes_key, sizeof(aes_key));
   RSA* rsa_pub = load_public_key("public.pem");
-  printf("msg2[3] = 0x%02x\n", (unsigned char)aes_key[3]);
   int enc_key_len = RSA_public_encrypt(sizeof(aes_key), aes_key, key, rsa_pub, RSA_PKCS1_OAEP_PADDING);
   send(socket, key, enc_key_len, 0);
   cout << socket << endl;

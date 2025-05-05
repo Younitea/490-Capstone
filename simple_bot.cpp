@@ -177,7 +177,8 @@ void printHand(char (&message)[PACKET_SIZE], vector<Card> &hand){
   }
   else{
     int len = 0;
-    unsigned char cards[224];
+    cout << (int) hand_size << endl;
+    unsigned char cards[216];
     unsigned char cut[224];
     memcpy(cut, message + 18, 224);
     unsigned char iv[16];
@@ -186,9 +187,11 @@ void printHand(char (&message)[PACKET_SIZE], vector<Card> &hand){
     EVP_DecryptInit_ex(ctx, EVP_aes_256_cbc(), nullptr, aes_key, iv);
     EVP_DecryptUpdate(ctx, cards, &len, cut, 224);
     EVP_DecryptFinal_ex(ctx, cards + len, &len);
-    EVP_DecryptFinal_ex(ctx, cards + len, &len);
     EVP_CIPHER_CTX_free(ctx);
 
+
+    printf("msg2[3] = 0x%02x\n", (unsigned char)message[3]);
+    printf("msg2[19] = 0x%02x\n", (unsigned char)message[19]);
     char cur_color = 'e';
     int8_t cur_value = 0;
     Card add;
