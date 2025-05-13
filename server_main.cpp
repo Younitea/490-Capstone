@@ -160,18 +160,17 @@ bool sendHandInfo(Player &player){
     bytes_sent += current_send;
   }
   std::cout << "bytes sent: " << bytes_sent << " hand size: " << (int)hand_size << "\n";
-  printf("key[3] = 0x%02x\n", (unsigned char)player.key[3]);
   return (bytes_sent == packet_size);
 }
 
-bool sendOppInfo(int socket, std::vector<Player> &players){
+bool sendOppInfo(int socket, std::vector<Player> &players, int skip_me){
   int bytes_sent = 0;
   int packet_length = 73; //1 for the flag, 2 ints per player, less current player)
   char packet[73] = {0};
   uint8_t action = OPPONENT_INFO;
   memcpy(packet, &action, ACTION_B_COUNT);
   for(int i = 0; i < (int)players.size(); i++){
-    if(i != socket){
+    if(i != skip_me){
       int count = htonl((int)players.at(i).hand.size());
       int h = htonl(i);
       memcpy(packet+ACTION_B_COUNT+(i*sizeof(int)*2), &h, sizeof(int));
@@ -276,7 +275,6 @@ int main(int argc, char* argv[]){
         player_count++;
         recv(as, key, sizeof(key), 0);
         decrypt_key(key, player.key);
-        printf("key[3] = 0x%02x\n", (unsigned char)player.key[3]);
         uno.addPlayer(player);
         continue;
       }
@@ -313,7 +311,7 @@ loopstart:
     else{
       std::cerr << "hand info send error\n";
     }
-    if(sendOppInfo(uno.players.at(i).socketDesc, uno.players)){
+    if(sendOppInfo(uno.players.at(i).socketDesc, uno.players, i)){
       std::cout << "Opponent info sent\n";
     }
     else{

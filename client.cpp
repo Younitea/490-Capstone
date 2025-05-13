@@ -175,7 +175,6 @@ void printHand(char (&message)[PACKET_SIZE]){
   }
   else{
     int len = 0;
-    cout << (int) hand_size << endl;
     unsigned char cards[216];
     unsigned char cut[224];
     memcpy(cut, message + 18, 224);
@@ -199,8 +198,18 @@ void printHand(char (&message)[PACKET_SIZE]){
 }
 
 void printOppInfo(char (&message)[PACKET_SIZE]){
-  //TODO
-  ;
+  int id = 0;
+  int hand_count = 0;
+  for(int i = 0; i < 9; i++){ //10 player max
+    memcpy(&id, message + ACTION_B_COUNT + (i*sizeof(int)*2),  sizeof(int));
+    memcpy(&hand_count, message + ACTION_B_COUNT + (i*sizeof(int)*2) + sizeof(int),  sizeof(int));
+    int id_h = ntohl(id);
+    int hand_count_h = ntohl(hand_count);
+    if(hand_count_h > 0)
+      cout << "Oponnent " << id_h << " has " << hand_count_h << " card(s) in hand)\n";
+    id = 0;
+    hand_count = 0;
+  }
 }
 
 void printTop(char (&message)[PACKET_SIZE]){
@@ -239,7 +248,6 @@ bool recv_all(int socket, char (&recvMsg)[PACKET_SIZE], int expect){
     if(bytes <= 0)
       return false;
     total_rec += bytes;
-    cout << bytes << endl;
   }
   return true;
 }
@@ -267,7 +275,6 @@ int main(int argc, char *argv[]){
   RSA* rsa_pub = load_public_key("public.pem");
   int enc_key_len = RSA_public_encrypt(sizeof(aes_key), aes_key, key, rsa_pub, RSA_PKCS1_OAEP_PADDING);
   send(socket, key, enc_key_len, 0);
-  cout << socket << endl;
   bool game_running = true;
 
   char play;
@@ -291,7 +298,6 @@ int main(int argc, char *argv[]){
     bool rec = recv_all(socket, msg1, GAME_INFO_SIZE);
     game_running = (game_running && rec);
     rec = recv_all(socket, msg2, 242);
-    printf("\n");
     game_running = (game_running && rec);
     rec = recv_all(socket, msg3, 73);
     game_running = (game_running && rec);
@@ -299,7 +305,6 @@ int main(int argc, char *argv[]){
     game_running = (game_running && rec);
 
     if(game_running) {
-      cout << "something recieved!\n";
       processMsg(msg1);
       processMsg(msg2);
       processMsg(msg3);
